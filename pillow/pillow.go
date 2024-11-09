@@ -3,7 +3,6 @@ package pillow
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -192,7 +191,6 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 	urls := make([]*url.URL, 0, len(ips))
 	for _, ip := range ips {
 		if ip.Equal(privateIp) {
-			log.Println("EQUAL IP, SKIPPING")
 			continue
 		}
 		clusUrl, err := url.Parse("nats://[" + ip.String() + "]:4248")
