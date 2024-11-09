@@ -1,0 +1,25 @@
+app = 'nats-pillow-fly-example'
+primary_region = 'bos'
+
+kill_signal = "SIGTERM"
+kill_timeout = 5
+
+[build]
+[build.args]
+GO_VERSION = '1.23.1'
+
+[env]
+ENV = "prod"
+
+[mounts]
+source = "nats_data"
+destination = "/nats"
+initial_size = "1gb"
+auto_extend_size_threshold = 90
+auto_extend_size_increment = "1gb"
+auto_extend_size_limit = "10gb"
+
+[[vm]]
+memory = '512mb'
+cpu_kind = 'shared'
+cpus = 1
