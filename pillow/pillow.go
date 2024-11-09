@@ -26,24 +26,28 @@ type Server struct {
 	opts       *options
 }
 
+// Duration to wait for embedded NATS to start. Defaults to 5 seconds if omitted
 func WithTimeout(t time.Duration) Option {
 	return func(o *options) {
 		o.Timeout = t
 	}
 }
 
-func WithInProcessClient() Option {
+// If enabled the returned client from Run() will communicate in-process and not over the network layer
+func WithInProcessClient(b bool) Option {
 	return func(o *options) {
-		o.InProcessClient = true
+		o.InProcessClient = b
 	}
 }
 
+// Enable NATS internal logging
 func WithLogging(b bool) Option {
 	return func(o *options) {
 		o.EnableLogging = b
 	}
 }
 
+// Configure JetStream
 func WithJetStream(dir string) Option {
 	return func(o *options) {
 		o.NATSSeverOptions.JetStream = true
@@ -52,29 +56,26 @@ func WithJetStream(dir string) Option {
 }
 
 type FlyioOptions struct {
-	Enable      bool
-	JetStream   bool
-	StoreDir    string
 	ClusterName string
 }
 
-func AdapterFlyio(flyopts FlyioOptions) Option {
-	if !flyopts.Enable {
+// Configures the server to run in the Flyio environment. Will cluster all machines in the same app and region
+func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
+	if !enable {
 		return func(o *options) {}
 	}
 
 	flyMachineId := os.Getenv("FLY_MACHINE_ID")
 	if flyMachineId == "" {
-		panic("Failed to retrieve Flyio environment variable")
+		panic("Flyio environment variable not found, are you running on Flyio?")
 	}
 	routes, err := getRoutesFlyio(context.TODO())
 	if err != nil {
 		panic(err)
 	}
+
 	return func(o *options) {
 		o.NATSSeverOptions.ServerName = "flynode-" + flyMachineId
-		o.NATSSeverOptions.JetStream = flyopts.JetStream
-		o.NATSSeverOptions.StoreDir = flyopts.StoreDir
 		o.NATSSeverOptions.Routes = routes
 		o.NATSSeverOptions.Cluster = server.ClusterOpts{
 			ConnectRetries: 5,
@@ -95,6 +96,7 @@ func WithNATSServerOptions(natsServerOpts *server.Options) Option {
 
 var Client *nats.Conn
 
+// Applies all passed options and started the NATS server
 func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	// Set default options, then override with their configured options
 	options := &options{
