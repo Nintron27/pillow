@@ -3,6 +3,7 @@ package pillow
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -176,6 +177,12 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 		return nil, ErrEnvVarNotFound
 	}
 
+	flyPrivateIp := os.Getenv("FLY_PRIVATE_IP")
+	if flyPrivateIp == "" {
+		return nil, ErrEnvVarNotFound
+	}
+	privateIp := net.ParseIP(flyPrivateIp)
+
 	// lookup machines in same region
 	ips, err := net.LookupIP(flyRegion + "." + flyAppName + ".internal")
 	if err != nil {
@@ -184,6 +191,10 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 
 	urls := make([]*url.URL, 0, len(ips))
 	for _, ip := range ips {
+		if ip.Equal(privateIp) {
+			log.Println("EQUAL IP, SKIPPING")
+			continue
+		}
 		clusUrl, err := url.Parse("nats://[" + ip.String() + "]:4248")
 		if err != nil {
 			panic("Unable to parse NATS cluster url")
