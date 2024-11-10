@@ -102,10 +102,19 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 				}
 
 				// Check if the routes have changed
+				oldRoutes := make([]string, 0, len(o.NATSSeverOptions.Routes))
+				for _, route := range o.NATSSeverOptions.Routes {
+					oldRoutes = append(oldRoutes, route.String())
+				}
+				newRoutes := make([]string, 0, len(routes))
+				for _, route := range routes {
+					oldRoutes = append(newRoutes, route.String())
+				}
+
 				log.Println("TEST 1")
-				log.Println(o.NATSSeverOptions.Routes)
-				log.Println(routes)
-				if unorderedEqual(routes, o.NATSSeverOptions.Routes) {
+				log.Println(oldRoutes)
+				log.Println(newRoutes)
+				if unorderedEqual(newRoutes, oldRoutes) {
 					log.Println("Routes are the same...")
 					continue
 				}
