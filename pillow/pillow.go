@@ -108,7 +108,7 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 				}
 				newRoutes := make([]string, 0, len(routes))
 				for _, route := range routes {
-					oldRoutes = append(newRoutes, route.String())
+					newRoutes = append(newRoutes, route.String())
 				}
 
 				log.Println("TEST 1")
