@@ -13,6 +13,7 @@ import (
 )
 
 type options struct {
+	server           *server.Server
 	Timeout          time.Duration // Time to wait for embedded NATS to start
 	InProcessClient  bool          // The returned client will communicate in process with the NATS server if enabled
 	EnableLogging    bool          // Enable NATS Logger
@@ -82,6 +83,45 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 			Name:           flyopts.ClusterName,
 			Port:           4248,
 		}
+
+		go func() {
+			for {
+				time.Sleep(time.Second * 10)
+
+				// Wait till server is started
+				if o.server == nil {
+					continue
+				}
+
+				// If error, just delay, can't really fix
+				routes, err := getRoutesFlyio(context.TODO())
+				if err != nil {
+					continue
+				}
+
+				// Check if the routes have changed
+				oldRoutes := make([]string, 0, len(o.NATSSeverOptions.Routes))
+				for _, route := range o.NATSSeverOptions.Routes {
+					oldRoutes = append(oldRoutes, route.String())
+				}
+				newRoutes := make([]string, 0, len(routes))
+				for _, route := range routes {
+					newRoutes = append(newRoutes, route.String())
+				}
+				if unorderedEqual(newRoutes, oldRoutes) {
+					continue
+				}
+
+				// Reload routes
+				options := o.NATSSeverOptions.Clone()
+				options.Routes = routes
+				err = o.server.ReloadOptions(options)
+				if err != nil {
+					continue
+				}
+				o.NATSSeverOptions.Routes = routes
+			}
+		}()
 	}
 }
 
@@ -125,6 +165,8 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	if !ns.ReadyForConnections(options.Timeout) {
 		return nil, nil, errors.New("NATS startup timed out")
 	}
+
+	options.server = ns
 
 	clientsOpts := []nats.Option{}
 	if options.InProcessClient {
@@ -176,6 +218,12 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 		return nil, ErrEnvVarNotFound
 	}
 
+	flyPrivateIp := os.Getenv("FLY_PRIVATE_IP")
+	if flyPrivateIp == "" {
+		return nil, ErrEnvVarNotFound
+	}
+	privateIp := net.ParseIP(flyPrivateIp)
+
 	// lookup machines in same region
 	ips, err := net.LookupIP(flyRegion + "." + flyAppName + ".internal")
 	if err != nil {
@@ -184,6 +232,9 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 
 	urls := make([]*url.URL, 0, len(ips))
 	for _, ip := range ips {
+		if ip.Equal(privateIp) {
+			continue
+		}
 		clusUrl, err := url.Parse("nats://[" + ip.String() + "]:4248")
 		if err != nil {
 			panic("Unable to parse NATS cluster url")
@@ -193,4 +244,20 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 	}
 
 	return urls, nil
+}
+
+func unorderedEqual[T comparable](first, second []T) bool {
+	if len(first) != len(second) {
+		return false
+	}
+	exists := make(map[T]bool)
+	for _, value := range first {
+		exists[value] = true
+	}
+	for _, value := range second {
+		if !exists[value] {
+			return false
+		}
+	}
+	return true
 }
