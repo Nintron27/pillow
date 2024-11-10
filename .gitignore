@@ -1,2 +1,2 @@
 examples/fly/nats
-go.work
+go.work*

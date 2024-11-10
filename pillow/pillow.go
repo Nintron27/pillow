@@ -3,6 +3,7 @@ package pillow
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 )
 
 type options struct {
+	server           *server.Server
 	Timeout          time.Duration // Time to wait for embedded NATS to start
 	InProcessClient  bool          // The returned client will communicate in process with the NATS server if enabled
 	EnableLogging    bool          // Enable NATS Logger
@@ -82,6 +84,39 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 			Name:           flyopts.ClusterName,
 			Port:           4248,
 		}
+
+		go func() {
+			for {
+				time.Sleep(time.Second * 10)
+				log.Println("Checking fly routes...")
+
+				if o.server == nil {
+					log.Println("Server not started yet...")
+					continue
+				}
+
+				routes, err := getRoutesFlyio(context.TODO())
+				if err != nil {
+					log.Println("ERR!!!...")
+					continue
+				}
+
+				// Check if the routes have changed
+				if unorderedEqual(routes, o.NATSSeverOptions.Routes) {
+					log.Println("Routes are the same...")
+					continue
+				}
+
+				log.Println("Reloading routes...")
+				options := o.NATSSeverOptions.Clone()
+				options.Routes = routes
+				err = o.server.ReloadOptions(options)
+				if err != nil {
+					log.Println("Err reloading routes")
+					log.Println(err)
+				}
+			}
+		}()
 	}
 }
 
@@ -125,6 +160,8 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	if !ns.ReadyForConnections(options.Timeout) {
 		return nil, nil, errors.New("NATS startup timed out")
 	}
+
+	options.server = ns
 
 	clientsOpts := []nats.Option{}
 	if options.InProcessClient {
@@ -202,4 +239,20 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 	}
 
 	return urls, nil
+}
+
+func unorderedEqual[T comparable](first, second []T) bool {
+	if len(first) != len(second) {
+		return false
+	}
+	exists := make(map[T]bool)
+	for _, value := range first {
+		exists[value] = true
+	}
+	for _, value := range second {
+		if !exists[value] {
+			return false
+		}
+	}
+	return true
 }
