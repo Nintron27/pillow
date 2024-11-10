@@ -3,7 +3,6 @@ package pillow
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -88,16 +87,15 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 		go func() {
 			for {
 				time.Sleep(time.Second * 10)
-				log.Println("Checking fly routes...")
 
+				// Wait till server is started
 				if o.server == nil {
-					log.Println("Server not started yet...")
 					continue
 				}
 
+				// If error, just delay, can't really fix
 				routes, err := getRoutesFlyio(context.TODO())
 				if err != nil {
-					log.Println("ERR!!!...")
 					continue
 				}
 
@@ -110,22 +108,15 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 				for _, route := range routes {
 					newRoutes = append(newRoutes, route.String())
 				}
-
-				log.Println("TEST 1")
-				log.Println(oldRoutes)
-				log.Println(newRoutes)
 				if unorderedEqual(newRoutes, oldRoutes) {
-					log.Println("Routes are the same...")
 					continue
 				}
 
-				log.Println("Reloading routes...")
+				// Reload routes
 				options := o.NATSSeverOptions.Clone()
 				options.Routes = routes
 				err = o.server.ReloadOptions(options)
 				if err != nil {
-					log.Println("Err reloading routes")
-					log.Println(err)
 					continue
 				}
 				o.NATSSeverOptions.Routes = routes
