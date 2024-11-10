@@ -126,7 +126,9 @@ func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
 				if err != nil {
 					log.Println("Err reloading routes")
 					log.Println(err)
+					continue
 				}
+				o.NATSSeverOptions.Routes = routes
 			}
 		}()
 	}
