@@ -213,6 +213,10 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 	if flyAppName == "" {
 		return nil, ErrEnvVarNotFound
 	}
+	flyProcess := os.Getenv("FLY_PROCESS_GROUP")
+	if flyProcess == "" {
+		return nil, ErrEnvVarNotFound
+	}
 	flyRegion := os.Getenv("FLY_REGION")
 	if flyRegion == "" {
 		return nil, ErrEnvVarNotFound
@@ -225,10 +229,17 @@ func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
 	privateIp := net.ParseIP(flyPrivateIp)
 
 	// lookup machines in same region
-	ips, err := net.LookupIP(flyRegion + "." + flyAppName + ".internal")
+	regionIPs, err := net.LookupIP(flyRegion + "." + flyAppName + ".internal")
 	if err != nil {
 		return nil, err
 	}
+	// lookup machines in same process group
+	processIPs, err := net.LookupIP(flyProcess + ".process." + flyAppName + ".internal")
+	if err != nil {
+		return nil, err
+	}
+
+	ips := intersectIPs(regionIPs, processIPs)
 
 	urls := make([]*url.URL, 0, len(ips))
 	for _, ip := range ips {
@@ -260,4 +271,22 @@ func unorderedEqual[T comparable](first, second []T) bool {
 		}
 	}
 	return true
+}
+
+// All IPs must be of the same type, ie IPv4 or IPv6
+func intersectIPs(a, b []net.IP) []net.IP {
+	set := make([]net.IP, 0)
+	hash := make(map[string]struct{})
+
+	for _, v := range a {
+		hash[v.String()] = struct{}{}
+	}
+
+	for _, v := range b {
+		if _, ok := hash[v.String()]; ok {
+			set = append(set, v)
+		}
+	}
+
+	return set
 }
