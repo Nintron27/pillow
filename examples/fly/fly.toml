@@ -1,5 +1,5 @@
 app = 'nats-pillow-fly-example'
-primary_region = 'bos'
+primary_region = 'iad'
 
 kill_signal = "SIGTERM"
 kill_timeout = 5

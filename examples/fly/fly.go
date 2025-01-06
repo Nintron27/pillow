@@ -26,7 +26,8 @@ func main() {
 		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
 		pillow.AdapterFlyio(env == "prod", pillow.FlyioOptions{
-			ClusterName: "testcluster",
+			ClusterName: "pillow-cluster",
+			JSRegions:   []string{"iad"},
 		}),
 	)
 	if err != nil {

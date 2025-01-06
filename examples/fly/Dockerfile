@@ -2,9 +2,15 @@ ARG GO_VERSION=1
 FROM golang:${GO_VERSION}-bookworm as builder
 
 WORKDIR /usr/src/app
-COPY go.mod go.sum ./
+
+# Copy the entire project directory into the container so it has the go.work
+COPY ../../ ./
+
+WORKDIR /usr/src/app/examples/fly
+
+# COPY go.mod go.sum ./
 RUN go mod download && go mod verify
-COPY . .
+# COPY . .
 RUN go build -v -o /run-app .
 
 

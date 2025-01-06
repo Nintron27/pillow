@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -9,18 +10,28 @@ import (
 	"time"
 
 	"github.com/Nintron27/nats-pillow/pillow"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 )
 
 func main() {
 	log.Println("Starting embedded NATS")
+
+	opts := &server.Options{
+		ServerName: "embedded-node",
+		Port:       4222,
+		JetStream:  true,
+		StoreDir:   "./nats",
+	}
+
 	nc, ns, err := pillow.Run(
-		pillow.WithInProcessClient(),
+		pillow.WithNATSServerOptions(opts),
+		pillow.WithInProcessClient(true),
+		pillow.WithLogging(true),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	log.Println("Embedded NATS started")
 
 	sigCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

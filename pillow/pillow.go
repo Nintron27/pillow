@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/url"
-	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
@@ -20,7 +19,7 @@ type options struct {
 	NATSSeverOptions *server.Options
 }
 
-type Option func(*options)
+type Option func(*options) error
 
 type Server struct {
 	NatsServer *server.Server
@@ -29,114 +28,57 @@ type Server struct {
 
 // Duration to wait for embedded NATS to start. Defaults to 5 seconds if omitted
 func WithTimeout(t time.Duration) Option {
-	return func(o *options) {
+	return func(o *options) error {
 		o.Timeout = t
+		return nil
 	}
 }
 
 // If enabled the returned client from Run() will communicate in-process and not over the network layer
 func WithInProcessClient(b bool) Option {
-	return func(o *options) {
+	return func(o *options) error {
 		o.InProcessClient = b
+		return nil
 	}
 }
 
 // Enable NATS internal logging
 func WithLogging(b bool) Option {
-	return func(o *options) {
+	return func(o *options) error {
 		o.EnableLogging = b
+		return nil
 	}
 }
 
 // Configure JetStream
 func WithJetStream(dir string) Option {
-	return func(o *options) {
+	return func(o *options) error {
 		o.NATSSeverOptions.JetStream = true
 		o.NATSSeverOptions.StoreDir = dir
-	}
-}
-
-type FlyioOptions struct {
-	ClusterName string
-}
-
-// Configures the server to run in the Flyio environment. Will cluster all machines in the same app and region
-func AdapterFlyio(enable bool, flyopts FlyioOptions) Option {
-	if !enable {
-		return func(o *options) {}
-	}
-
-	flyMachineId := os.Getenv("FLY_MACHINE_ID")
-	if flyMachineId == "" {
-		panic("Flyio environment variable not found, are you running on Flyio?")
-	}
-	routes, err := getRoutesFlyio(context.TODO())
-	if err != nil {
-		panic(err)
-	}
-
-	return func(o *options) {
-		o.NATSSeverOptions.ServerName = "flynode-" + flyMachineId
-		o.NATSSeverOptions.Routes = routes
-		o.NATSSeverOptions.Cluster = server.ClusterOpts{
-			ConnectRetries: 5,
-			Name:           flyopts.ClusterName,
-			Port:           4248,
-		}
-
-		go func() {
-			for {
-				time.Sleep(time.Second * 10)
-
-				// Wait till server is started
-				if o.server == nil {
-					continue
-				}
-
-				// If error, just delay, can't really fix
-				routes, err := getRoutesFlyio(context.TODO())
-				if err != nil {
-					continue
-				}
-
-				// Check if the routes have changed
-				oldRoutes := make([]string, 0, len(o.NATSSeverOptions.Routes))
-				for _, route := range o.NATSSeverOptions.Routes {
-					oldRoutes = append(oldRoutes, route.String())
-				}
-				newRoutes := make([]string, 0, len(routes))
-				for _, route := range routes {
-					newRoutes = append(newRoutes, route.String())
-				}
-				if unorderedEqual(newRoutes, oldRoutes) {
-					continue
-				}
-
-				// Reload routes
-				options := o.NATSSeverOptions.Clone()
-				options.Routes = routes
-				err = o.server.ReloadOptions(options)
-				if err != nil {
-					continue
-				}
-				o.NATSSeverOptions.Routes = routes
-			}
-		}()
+		return nil
 	}
 }
 
 // Apply your own NATs Server Options. Note, this will override
 // any existing options, so it's recommended to place first
-// in the list of options in Run()
+// in the list of options in Run().
 func WithNATSServerOptions(natsServerOpts *server.Options) Option {
-	return func(o *options) {
+	return func(o *options) error {
 		o.NATSSeverOptions = natsServerOpts
+		return nil
 	}
 }
 
+// Global variable of the nats client created from Run().
+//
+// If you are starting multiple embedded NATS servers, it's recommended to use
+// the client returned from Run() as this Client will just be from the last
+// invocation of Run().
 var Client *nats.Conn
 
-// Applies all passed options and started the NATS server
+// Applies all passed options and starts the NATS server, returning a client
+// connection, a server struct, and error if there was a problem starting the
+// server.
 func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	// Set default options, then override with their configured options
 	options := &options{
@@ -148,7 +90,10 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 		},
 	}
 	for _, o := range opts {
-		o(options)
+		err := o(options)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	ns, err := server.NewServer(options.NATSSeverOptions)
@@ -204,58 +149,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-// Platform specific environment variable not found
-var ErrEnvVarNotFound = errors.New("Platform ENV not found")
-
-func getRoutesFlyio(ctx context.Context) ([]*url.URL, error) {
-	// Get fly ENV var
-	flyAppName := os.Getenv("FLY_APP_NAME")
-	if flyAppName == "" {
-		return nil, ErrEnvVarNotFound
-	}
-	flyProcess := os.Getenv("FLY_PROCESS_GROUP")
-	if flyProcess == "" {
-		return nil, ErrEnvVarNotFound
-	}
-	flyRegion := os.Getenv("FLY_REGION")
-	if flyRegion == "" {
-		return nil, ErrEnvVarNotFound
-	}
-
-	flyPrivateIp := os.Getenv("FLY_PRIVATE_IP")
-	if flyPrivateIp == "" {
-		return nil, ErrEnvVarNotFound
-	}
-	privateIp := net.ParseIP(flyPrivateIp)
-
-	// lookup machines in same region
-	regionIPs, err := net.LookupIP(flyRegion + "." + flyAppName + ".internal")
-	if err != nil {
-		return nil, err
-	}
-	// lookup machines in same process group
-	processIPs, err := net.LookupIP(flyProcess + ".process." + flyAppName + ".internal")
-	if err != nil {
-		return nil, err
-	}
-
-	ips := intersectIPs(regionIPs, processIPs)
-
-	urls := make([]*url.URL, 0, len(ips))
-	for _, ip := range ips {
-		if ip.Equal(privateIp) {
-			continue
-		}
-		clusUrl, err := url.Parse("nats://[" + ip.String() + "]:4248")
-		if err != nil {
-			panic("Unable to parse NATS cluster url")
-		}
-
-		urls = append(urls, clusUrl)
-	}
-
-	return urls, nil
-}
+// ##############################################################
+// Below are random helper functions, don't care to split out yet
+// ##############################################################
 
 func unorderedEqual[T comparable](first, second []T) bool {
 	if len(first) != len(second) {
@@ -272,6 +168,37 @@ func unorderedEqual[T comparable](first, second []T) bool {
 	}
 	return true
 }
+
+// unorderedEqualFunc reports whether two unordered slices are equal using an equality
+// and an identity function function on each pair of elements. If the lengths
+// are different unorderedEqualFunc returns false. Otherwise, the elements entered into a
+// map and iterated over until one of the elements dosen't match the element with a matching
+// identifier, or if a matching identifier element can't be found.
+// func unorderedEqualFunc[S1 ~[]E1, S2 ~[]E2, E1, E2 any, T comparable](
+// 	s1 S1,
+// 	s2 S2,
+// 	id func(any) T,
+// 	eq func(E1, E2) bool,
+// ) bool {
+// 	// slices.EqualFunc()
+// 	if len(s1) != len(s2) {
+// 		return false
+// 	}
+// 	idMap := make(map[T]E1)
+// 	for _, val1 := range s1 {
+// 		idMap[id(val1)] = val1
+// 	}
+// 	for _, val2 := range s2 {
+// 		val1, ok := idMap[id(val2)]
+// 		if !ok {
+// 			return false
+// 		}
+// 		if !eq(val1, val2) {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
 
 // All IPs must be of the same type, ie IPv4 or IPv6
 func intersectIPs(a, b []net.IP) []net.IP {
@@ -290,3 +217,39 @@ func intersectIPs(a, b []net.IP) []net.IP {
 
 	return set
 }
+
+// FindAndRemoveSubstring searches for the first string in the array that contains the substring.
+// If found, it removes the substring from that string and returns the modified string and true.
+// If not found, it returns an empty string and false.
+func findAndRemoveSubstring(arr []string, sub string) (string, bool) {
+	for _, str := range arr {
+		if strings.Contains(str, sub) {
+			return strings.Replace(str, sub, "", 1), true
+		}
+	}
+	return "", false
+}
+
+// var ErrJetStreamStartedSolo = errors.New("JetStream started as standalone as cluster failed")
+
+// func startJetStream(s *server.Server, o *server.Options) error {
+// 	opts := o.Clone()
+// 	cfg := server.JetStreamConfig{
+// 		MaxMemory:    opts.JetStreamMaxMemory,
+// 		MaxStore:     opts.JetStreamMaxStore,
+// 		StoreDir:     opts.StoreDir,
+// 		SyncInterval: opts.SyncInterval,
+// 		SyncAlways:   opts.SyncAlways,
+// 		Domain:       opts.JetStreamDomain,
+// 		CompressOK:   true,
+// 		UniqueTag:    opts.JetStreamUniqueTag,
+// 	}
+// 	err := s.EnableJetStream(&cfg)
+// 	if err != nil {
+// 		if s.JetStreamEnabled() && !s.JetStreamIsClustered() {
+// 			return ErrJetStreamStartedSolo
+// 		}
+// 		return s.DisableJetStream()
+// 	}
+// 	return nil
+// }
