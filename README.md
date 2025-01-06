@@ -1,4 +1,5 @@
-![Nats Pillow icon](./assets/nats-pillow.png)
+![Nats Pillow icon](https://github.com/user-attachments/assets/7fd40216-2a5d-4ca8-b53e-04710038e718)
+
 
 # NATS Pillow
 A soft little wrapper for NATS, to remove the boilerplate for certain use cases, mainly running NATS embedded in Go.
