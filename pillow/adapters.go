@@ -15,25 +15,70 @@ import (
 )
 
 type FlyioOptions struct {
-	// The name to be used for clustering. Appended will be `-<REGION>` where REGION is the
-	// Flyio region this cluster is in. If DisableSuperClustering is set to true, this behavior
-	// will be disabled.
-	ClusterName string
-
-	// DisableRouteRefetching bool
-
-	// Will disable the automatic superclustering behavior between regions. Also disabled
-	// the appending of `-<REGION>` to the ClusterName
-	DisableSuperClustering bool
-
-	// If you have JetStream enabled, pillow will automatically turn it off unless the region
-	// is passed in this option. Example: JSRegions: []string{"iad"}
+	// Configure how the Flyio Adapter will organize your NATS topology.
 	//
-	// This behavior is because nodes will fail to start if JetStream is enabled along
-	// with superclustering and the cluster has less than 3 nodes. Once this following
-	// issue on Flyio is addressed this behavior may change: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
-	JSRegions []string
+	// ClusteringMode will cluster all intra-region machines, and super cluster regions together.
+	// Note, if JS is enabled ALL regions must have >= 3 machines.
+	//
+	// HubAndSpokeMode requires you to configure a hub region (or regions) and then all machines in
+	// other regions will connect to the hub as leaf nodes.
+	//
+	// ConstellationMode will connect all regions together using leaf node.
+	//
+	// CustomMode allows you to configure exactly how you want your regions to be organized.
+	OperationalMode OperationalMode
+
+	// Configure how the Flyio Adapter handles its Clustering mode.
+	ClusteringOptions ClusteringModeOptions
+
+	// Configure how the Flyio Adapter handles its HubAndSpoke mode.
+	HubAndSpokeOptions HubAndSpokeModeOptions
+
+	// Configure how the Flyio Adapter handles its Constellation mode.
+	ConstellationOptions ConstellationModeOptions
 }
+
+type ClusteringModeOptions struct {
+	// The name to be used for clustering. Appended will be `-<REGION>` where REGION is the
+	// Flyio region this cluster is in.
+	ClusterName string
+}
+
+type HubAndSpokeModeOptions struct {
+	// The regions that should be clustered and superclustered together.
+	//
+	// If only one region is passed then superclustering will be disabled.
+	HubRegions []string
+
+	// The name to be used for the hub's cluster(s).
+	//
+	// If there is multiple entries in HubRegions then `-<REGION>` (where REGION is the
+	// Flyio region) will be appended.
+	ClusterName string
+}
+
+type ConstellationModeOptions struct {
+	// If set to true then clustering within regions will be disabled.
+	//
+	// Note, regions passed in ClusteredRegions will still have clustering enabled.
+	DisableClustering bool
+
+	// Configure which regions should be clustered. If array isn't empty then ONLY the
+	// regions passed will have clustering enabled.
+	ClusteredRegions []string
+}
+
+type manualModeOptions struct {
+}
+
+type OperationalMode int
+
+const (
+	ClusteringMode OperationalMode = iota
+	HubAndSpokeMode
+	ConstellationMode
+	CustomMode
+)
 
 const (
 	ClusterPort int = 4232
