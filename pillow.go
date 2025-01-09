@@ -35,26 +35,17 @@ func WithTimeout(t time.Duration) Option {
 }
 
 // If enabled the returned client from Run() will communicate in-process and not over the network layer
-func WithInProcessClient(b bool) Option {
+func WithInProcessClient(enable bool) Option {
 	return func(o *options) error {
-		o.InProcessClient = b
+		o.InProcessClient = enable
 		return nil
 	}
 }
 
 // Enable NATS internal logging
-func WithLogging(b bool) Option {
+func WithLogging(enable bool) Option {
 	return func(o *options) error {
-		o.EnableLogging = b
-		return nil
-	}
-}
-
-// Configure JetStream
-func WithJetStream(dir string) Option {
-	return func(o *options) error {
-		o.NATSSeverOptions.JetStream = true
-		o.NATSSeverOptions.StoreDir = dir
+		o.EnableLogging = enable
 		return nil
 	}
 }
