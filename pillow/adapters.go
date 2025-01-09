@@ -9,53 +9,46 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 )
 
-type FlyioOptions struct {
-	// The name to be used for clustering. Appended will be `-<REGION>` where REGION is the
-	// Flyio region this cluster is in. If DisableSuperClustering is set to true, this behavior
-	// will be disabled.
-	ClusterName string
-
-	// DisableRouteRefetching bool
-
-	// Will disable the automatic superclustering behavior between regions. Also disabled
-	// the appending of `-<REGION>` to the ClusterName
-	DisableSuperClustering bool
-
-	// If you have JetStream enabled, pillow will automatically turn it off unless the region
-	// is passed in this option. Example: JSRegions: []string{"iad"}
-	//
-	// This behavior is because nodes will fail to start if JetStream is enabled along
-	// with superclustering and the cluster has less than 3 nodes. Once this following
-	// issue on Flyio is addressed this behavior may change: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
-	JSRegions []string
-}
-
 const (
-	ClusterPort int = 4232
-	GatewayPort int = 4242
+	ClusterPort  int = 4244
+	GatewayPort  int = 7244
+	LeafNodePort int = 7422
 )
 
-// Configures the server to run in the Flyio environment. Will cluster all machines in the same app and region
-// and supercluster different regions together. This Option should be used last, as it overrides specific
-// options like JetStream, to achieve the opinionated behavior.
-func AdapterFlyio(enable bool, opts FlyioOptions) Option {
-	if !enable {
-		return func(o *options) error { return nil }
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
+type PlatformConfigurator interface {
+	Configure(context.Context) Option
+}
 
+// FlyioClustering will cluster all intra-region machines, and super cluster regions together.
+// Note, if JetStream is enabled ALL regions must have >= 3 machines.
+type FlyioClustering struct {
+	// The name to be used for clustering. Appended will be `-<REGION>` where REGION is the
+	// Flyio region this cluster is in.
+	ClusterName string
+}
+
+// FlyioHubAndSpoke will cluster all machines in your primary region, and then all other
+// regions will have their machines individually connect to your primary region cluster
+// as leaf nodes.
+//
+// Additionally, the primary region cluster will have the JS domain of "hub" and the leaf nodes
+// will have the structure of "leaf-<REGION>-<MACHINE_ID>"
+type FlyioHubAndSpoke struct {
+	// The name to be used for the primary region cluster.
+	ClusterName string
+}
+
+func (c *FlyioClustering) Configure(ctx context.Context) Option {
 	env, err := flyioGetEnvVars()
 	if err != nil {
 		return func(o *options) error { return err }
 	}
 
-	inRegionRoutes, err := getRoutesFlyio(ctx, &env)
+	inRegionRoutes, err := flyioGetRegionURLs(ctx, &env, env.region, "nats", ClusterPort)
 	if err != nil {
 		// Do nothing, regions will be empty until there is a resolution to
 		// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
@@ -72,54 +65,44 @@ func AdapterFlyio(enable bool, opts FlyioOptions) Option {
 		inRegionRoutes = append(inRegionRoutes, selfURL)
 	}
 
-	clusterName := opts.ClusterName
+	clusterName := c.ClusterName + "-" + env.region
 	var gatewayOpts server.GatewayOpts
 
-	if !opts.DisableSuperClustering {
-		clusterName += "-" + env.region
-		regions, err := getRegionsFlyio(ctx, &env)
-		if err != nil {
-			// Do nothing, regions will be empty until there is a resolution to
-			// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
-			//
-			// return func(o *options) error { return err }
-		}
+	regions, err := getRegionsFlyio(ctx, &env)
+	if err != nil {
+		// Do nothing, regions will be empty until there is a resolution to
+		// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
+		//
+		// return func(o *options) error { return err }
+	}
 
-		gateways := make([]*server.RemoteGatewayOpts, 0)
-		for _, region := range regions {
-			urls := make([]*url.URL, 0, len(region.machines))
-			for _, machine := range region.machines {
-				gatewayUrl, err := url.Parse("nats://[" + machine.ip.String() + "]:" + strconv.Itoa(GatewayPort))
-				if err != nil {
-					return func(o *options) error {
-						return errors.New("Unable to parse NATS gateway url")
-					}
+	gateways := make([]*server.RemoteGatewayOpts, 0)
+	for _, region := range regions {
+		urls := make([]*url.URL, 0, len(region.machines))
+		for _, machine := range region.machines {
+			gatewayUrl, err := url.Parse("nats://[" + machine.ip.String() + "]:" + strconv.Itoa(GatewayPort))
+			if err != nil {
+				return func(o *options) error {
+					return errors.New("Unable to parse NATS gateway url")
 				}
-				urls = append(urls, gatewayUrl)
 			}
-
-			gateways = append(gateways, &server.RemoteGatewayOpts{
-				Name: opts.ClusterName + "-" + region.name,
-				URLs: urls,
-			})
+			urls = append(urls, gatewayUrl)
 		}
 
-		gatewayOpts = server.GatewayOpts{
-			Name:           clusterName,
-			Host:           env.privateIP,
-			Port:           GatewayPort,
-			ConnectRetries: 5,
-			Gateways:       gateways,
-		}
+		gateways = append(gateways, &server.RemoteGatewayOpts{
+			Name: c.ClusterName + "-" + region.name,
+			URLs: urls,
+		})
+	}
+
+	gatewayOpts = server.GatewayOpts{
+		Name:           clusterName,
+		Port:           GatewayPort,
+		ConnectRetries: 5,
+		Gateways:       gateways,
 	}
 
 	return func(o *options) error {
-		if o.NATSSeverOptions.JetStream {
-			if !slices.Contains(opts.JSRegions, env.region) {
-				o.NATSSeverOptions.JetStream = false
-			}
-		}
-
 		o.NATSSeverOptions.ServerName = "fly-" + env.machineID
 		o.NATSSeverOptions.Routes = inRegionRoutes
 		o.NATSSeverOptions.Gateway = gatewayOpts
@@ -128,48 +111,86 @@ func AdapterFlyio(enable bool, opts FlyioOptions) Option {
 			Name:           clusterName,
 			Port:           ClusterPort,
 		}
-
-		// if !opts.DisableRouteRefetching {
-		// 	go func() {
-		// 		for {
-		// 			time.Sleep(time.Second * 30)
-
-		// 			// Wait till server is started
-		// 			if o.server == nil {
-		// 				continue
-		// 			}
-
-		// 			// If server isn't running stop reloading routes
-		// 			if !o.server.Running() {
-		// 				return
-		// 			}
-
-		// 			var wg sync.WaitGroup
-		// 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		// 			wg.Add(1)
-		// 			go func() {
-		// 				defer cancel()
-		// 				defer wg.Done()
-
-		// 				err := flyioReloadRoutes(ctx, o, &opts, &env)
-		// 				if err != nil {
-		// 					// Not really sure what to do with this error
-		// 					return
-		// 				}
-		// 			}()
-		// 			wg.Wait()
-		// 		}
-		// 	}()
-		// }
-
 		return nil
 	}
 }
 
+func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
+	env, err := flyioGetEnvVars()
+	if err != nil {
+		return func(o *options) error { return err }
+	}
+
+	isPrimaryRegion := env.primaryRegion == env.region
+
+	urlProtocol := "nats"
+	urlPort := ClusterPort
+	if !isPrimaryRegion {
+		urlProtocol = "nats-leaf"
+		urlPort = LeafNodePort
+	}
+
+	primaryRegionURLs, err := flyioGetRegionURLs(ctx, &env, env.primaryRegion, urlProtocol, urlPort)
+	if err != nil {
+		// Do nothing, regions will be empty until there is a resolution to
+		// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
+		//
+		// return func(o *options) error { return err }
+	}
+	// Till issue above is fixed forcefully include self so that when JS is enabled it doesn't crash on
+	// startup from empty routes, unless it's not primary region, in that case return error as there
+	// isn't much we can do to recover from this.
+	if len(primaryRegionURLs) == 0 {
+		if isPrimaryRegion {
+			selfURL, err := url.Parse("nats://[" + env.privateIP + "]:" + strconv.Itoa(ClusterPort))
+			if err != nil {
+				return func(o *options) error { return errors.New("Unable to parse NATS gateway url") }
+			}
+			primaryRegionURLs = append(primaryRegionURLs, selfURL)
+		} else {
+			return func(o *options) error { return errors.New("Unable to get primary region routes") }
+		}
+	}
+
+	remotes := make([]*server.RemoteLeafOpts, 0)
+	if !isPrimaryRegion {
+		remotes = append(remotes, &server.RemoteLeafOpts{
+			URLs: primaryRegionURLs,
+		})
+	}
+
+	return func(o *options) error {
+		if isPrimaryRegion {
+			o.NATSSeverOptions.JetStreamDomain = "hub"
+			o.NATSSeverOptions.LeafNode = server.LeafNodeOpts{
+				Port: LeafNodePort,
+			}
+			o.NATSSeverOptions.Routes = primaryRegionURLs
+			o.NATSSeverOptions.Cluster = server.ClusterOpts{
+				ConnectRetries: 5,
+				Name:           c.ClusterName,
+				Port:           ClusterPort,
+			}
+		} else {
+			o.NATSSeverOptions.JetStreamDomain = "leaf-" + env.region + "-" + env.machineID
+			o.NATSSeverOptions.LeafNode = server.LeafNodeOpts{
+				Remotes: remotes,
+			}
+		}
+
+		o.NATSSeverOptions.ServerName = "fly-" + env.machineID
+		return nil
+	}
+}
+
+func WithPlatformAdapter(ctx context.Context, enable bool, platformCfgr PlatformConfigurator) Option {
+	return platformCfgr.Configure(ctx)
+}
+
 // flyioReloadRoutes will fetch the current cluster and gateway routes, comparing them
 // to the server's current configuration and reloading if they have changed.
-func flyioReloadRoutes(ctx context.Context, opts *options, _ *FlyioOptions, env *flyioEnv) error {
-	inRegionroutes, err := getRoutesFlyio(ctx, env)
+func flyioReloadRoutes(ctx context.Context, opts *options, env *flyioEnv) error {
+	inRegionroutes, err := flyioGetRegionURLs(ctx, env, env.region, "nats", ClusterPort)
 	if err != nil {
 		return err
 	}
@@ -261,11 +282,12 @@ var ErrEnvVarNotFound = errors.New("Platform ENV not found")
 var ErrPlatformImplementationChanged = errors.New("Platform implementation changed")
 
 type flyioEnv struct {
-	machineID    string // FLY_MACHINE_ID
-	appName      string // FLY_APP_NAME
-	processGroup string // FLY_PROCESS_GROUP
-	region       string // FLY_REGION
-	privateIP    string // FLY_PRIVATE_IP
+	machineID     string // FLY_MACHINE_ID
+	appName       string // FLY_APP_NAME
+	processGroup  string // FLY_PROCESS_GROUP
+	region        string // FLY_REGION
+	privateIP     string // FLY_PRIVATE_IP
+	primaryRegion string // PRIMARY_REGION
 }
 
 func flyioGetEnvVars() (flyioEnv, error) {
@@ -288,6 +310,10 @@ func flyioGetEnvVars() (flyioEnv, error) {
 	}
 	env.privateIP = os.Getenv("FLY_PRIVATE_IP")
 	if env.privateIP == "" {
+		return flyioEnv{}, ErrEnvVarNotFound
+	}
+	env.primaryRegion = os.Getenv("PRIMARY_REGION")
+	if env.primaryRegion == "" {
 		return flyioEnv{}, ErrEnvVarNotFound
 	}
 
@@ -381,14 +407,14 @@ func getRegionsFlyio(ctx context.Context, env *flyioEnv) ([]regionInfo, error) {
 	return regionsArr, nil
 }
 
-// getRoutesFlyio will return a []*url.URL of the ips of machines in the same region
+// flyioGetRegionURLs will return a []*url.URL of the ips of machines in the same region
 // in the same process group.
-func getRoutesFlyio(ctx context.Context, env *flyioEnv) ([]*url.URL, error) {
+func flyioGetRegionURLs(ctx context.Context, env *flyioEnv, region string, protocol string, port int) ([]*url.URL, error) {
 	privateIp := net.ParseIP(env.privateIP)
 
 	var r net.Resolver
 	// lookup machines in same region
-	regionIPs, err := r.LookupIP(ctx, "ip6", env.region+"."+env.appName+".internal")
+	regionIPs, err := r.LookupIP(ctx, "ip6", region+"."+env.appName+".internal")
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +428,12 @@ func getRoutesFlyio(ctx context.Context, env *flyioEnv) ([]*url.URL, error) {
 
 	urls := make([]*url.URL, 0, len(ips))
 	for _, ip := range ips {
+		// TODO: Potentially remove? it's really fine if IP is in result
 		if ip.Equal(privateIp) {
 			continue
 		}
-		clusUrl, err := url.Parse("nats://[" + ip.String() + "]:" + strconv.Itoa(ClusterPort))
+
+		clusUrl, err := url.Parse(protocol + "://[" + ip.String() + "]:" + strconv.Itoa(port))
 		if err != nil {
 			return nil, errors.New("Unable to parse NATS gateway url")
 		}

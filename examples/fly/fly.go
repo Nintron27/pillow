@@ -18,6 +18,7 @@ func main() {
 		env = "dev"
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	_, ns, err := pillow.Run(
 		pillow.WithNATSServerOptions(&server.Options{
 			JetStream: true,
@@ -25,20 +26,20 @@ func main() {
 		}),
 		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
-		pillow.AdapterFlyio(env == "prod", pillow.FlyioOptions{
-			ClusterName: "pillow-cluster",
-			JSRegions:   []string{"iad"},
+		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioHubAndSpoke{
+			ClusterName: "pillow-hub",
 		}),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+	cancel()
 
 	sigCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	<-sigCtx.Done()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
 	if err := ns.Shutdown(ctx); err != nil {
