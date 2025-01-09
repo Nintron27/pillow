@@ -12,17 +12,24 @@ import (
 )
 
 type options struct {
-	server           *server.Server
-	Timeout          time.Duration // Time to wait for embedded NATS to start
-	InProcessClient  bool          // The returned client will communicate in process with the NATS server if enabled
-	EnableLogging    bool          // Enable NATS Logger
+	server *server.Server
+
+	// Time to wait for embedded NATS to start
+	Timeout time.Duration
+
+	// The returned client will communicate in process with the NATS server if enabled
+	InProcessClient bool
+
+	// Enable NATS Logger
+	EnableLogging bool
+
 	NATSSeverOptions *server.Options
 }
 
 type Option func(*options) error
 
 type Server struct {
-	NatsServer *server.Server
+	NATSServer *server.Server
 	opts       *options
 }
 
@@ -34,7 +41,8 @@ func WithTimeout(t time.Duration) Option {
 	}
 }
 
-// If enabled the returned client from Run() will communicate in-process and not over the network layer
+// If enabled the returned client from Run() (and global pillow.Client) will
+// communicate in-process and not over the network layer
 func WithInProcessClient(enable bool) Option {
 	return func(o *options) error {
 		o.InProcessClient = enable
@@ -117,7 +125,7 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	Client = nc
 
 	return nc, &Server{
-		NatsServer: ns,
+		NATSServer: ns,
 		opts:       options,
 	}, nil
 }
@@ -126,9 +134,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	done := make(chan any)
 	go func() {
 		if s.opts.NATSSeverOptions.NoSigs {
-			s.NatsServer.Shutdown()
+			s.NATSServer.Shutdown()
 		}
-		s.NatsServer.WaitForShutdown()
+		s.NATSServer.WaitForShutdown()
 		close(done)
 	}()
 

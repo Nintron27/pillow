@@ -37,6 +37,9 @@ func main() {
 	defer cancel()
 
 	// Echo back message
+	//
+	// Can also use the global client variable from pillow
+	// pillow.Client.Subscribe...
 	nc.Subscribe("echo", func(msg *nats.Msg) {
 		msg.Respond([]byte("echoing:" + string(msg.Data)))
 	})
