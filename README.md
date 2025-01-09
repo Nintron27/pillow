@@ -19,7 +19,7 @@ then follow the [embedded example](./examples/embedded/embedded.go).
 
 ## Features
 - Removes boilerplate when using NATS embedded in Go, and implements sane defaults.
-- Flyio Adapters (auto clustering w/ route updates, node naming based on fly machine ID)
+- Flyio Adapters
   - Clustering: Auto clustering in region, supercluster regions together.
   - HubAndSpoke: Auto cluster primary region, and leaf node other regions' machines to your hub.
 - *Your needed feature here*? Leave a feature request issue!
