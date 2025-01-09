@@ -37,4 +37,4 @@ then follow the [embedded example](./examples/embedded/embedded.go).
 > Take great caution when switching adapters (such as HubAndSpoke to Clustering) as the cluster names and JS domains will change.
 > Also caution with scaling down JS regions, as there seems to be a bug with quorums failing.
 
-*Credit to [@whaaaley](https://github.com/whaaaley) for project name and icon*
+*Credit to [@whaaaley](https://github.com/whaaaley) for project name and icon, and [@delaneyj](https://github.com/delaneyj) for the inspiration.*
