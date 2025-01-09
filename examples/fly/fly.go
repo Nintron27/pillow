@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Nintron27/nats-pillow/pillow"
+	"github.com/Nintron27/pillow"
 	"github.com/nats-io/nats-server/v2/server"
 )
 
