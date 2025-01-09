@@ -2,6 +2,7 @@
 
 # Pillow
 A soft little wrapper for [NATS](https://nats.io/) ^-^
+
 Remove the boilerplate in your embedded NATS projects, and deploy to cloud platforms with added functionality!
 
 > [!WARNING]
