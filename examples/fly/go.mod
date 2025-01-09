@@ -3,7 +3,7 @@ module pillow-fly
 go 1.23.1
 
 require (
-	github.com/Nintron27/nats-pillow v0.1.0
+	github.com/Nintron27/pillow v0.4.0
 	github.com/nats-io/nats-server/v2 v2.10.22
 )
 
