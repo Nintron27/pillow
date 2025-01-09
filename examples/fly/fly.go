@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Nintron27/nats-pillow/pillow"
+	"github.com/Nintron27/pillow"
 	"github.com/nats-io/nats-server/v2/server"
 )
 
@@ -26,7 +26,7 @@ func main() {
 		}),
 		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
-		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioHubAndSpoke{
+		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioClustering{
 			ClusterName: "pillow-hub",
 		}),
 	)

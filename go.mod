@@ -1,4 +1,4 @@
-module github.com/Nintron27/nats-pillow
+module github.com/Nintron27/pillow
 
 go 1.23.1
 

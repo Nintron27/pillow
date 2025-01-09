@@ -1,4 +1,4 @@
-module nats-pillow-fly
+module pillow-fly
 
 go 1.23.1
 
