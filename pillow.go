@@ -78,6 +78,8 @@ var Client *nats.Conn
 // Applies all passed options and starts the NATS server, returning a client
 // connection, a server struct, and error if there was a problem starting the
 // server.
+//
+// All configuration functions start with "With". Example WithLogging(true)
 func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	// Set default options, then override with their configured options
 	options := &options{
