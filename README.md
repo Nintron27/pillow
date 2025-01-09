@@ -18,7 +18,7 @@ go get github.com/Nintron27/pillow
 then follow the [embedded example](./examples/embedded/embedded.go).
 
 ## Features
-- Remove boilerplate when using NATS embedded in Go
+- Removes boilerplate when using NATS embedded in Go, and implements sane defaults.
 - Flyio Adapters (auto clustering w/ route updates, node naming based on fly machine ID)
   - Clustering: Auto clustering in region, supercluster regions together.
   - HubAndSpoke: Auto cluster primary region, and leaf node other regions' machines to your hub.
