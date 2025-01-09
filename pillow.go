@@ -12,17 +12,24 @@ import (
 )
 
 type options struct {
-	server           *server.Server
-	Timeout          time.Duration // Time to wait for embedded NATS to start
-	InProcessClient  bool          // The returned client will communicate in process with the NATS server if enabled
-	EnableLogging    bool          // Enable NATS Logger
+	server *server.Server
+
+	// Time to wait for embedded NATS to start
+	Timeout time.Duration
+
+	// The returned client will communicate in process with the NATS server if enabled
+	InProcessClient bool
+
+	// Enable NATS Logger
+	EnableLogging bool
+
 	NATSSeverOptions *server.Options
 }
 
 type Option func(*options) error
 
 type Server struct {
-	NatsServer *server.Server
+	NATSServer *server.Server
 	opts       *options
 }
 
@@ -34,27 +41,19 @@ func WithTimeout(t time.Duration) Option {
 	}
 }
 
-// If enabled the returned client from Run() will communicate in-process and not over the network layer
-func WithInProcessClient(b bool) Option {
+// If enabled the returned client from Run() (and global pillow.Client) will
+// communicate in-process and not over the network layer
+func WithInProcessClient(enable bool) Option {
 	return func(o *options) error {
-		o.InProcessClient = b
+		o.InProcessClient = enable
 		return nil
 	}
 }
 
 // Enable NATS internal logging
-func WithLogging(b bool) Option {
+func WithLogging(enable bool) Option {
 	return func(o *options) error {
-		o.EnableLogging = b
-		return nil
-	}
-}
-
-// Configure JetStream
-func WithJetStream(dir string) Option {
-	return func(o *options) error {
-		o.NATSSeverOptions.JetStream = true
-		o.NATSSeverOptions.StoreDir = dir
+		o.EnableLogging = enable
 		return nil
 	}
 }
@@ -79,6 +78,8 @@ var Client *nats.Conn
 // Applies all passed options and starts the NATS server, returning a client
 // connection, a server struct, and error if there was a problem starting the
 // server.
+//
+// All configuration functions start with "With". Example WithLogging(true)
 func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	// Set default options, then override with their configured options
 	options := &options{
@@ -126,7 +127,7 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 	Client = nc
 
 	return nc, &Server{
-		NatsServer: ns,
+		NATSServer: ns,
 		opts:       options,
 	}, nil
 }
@@ -135,9 +136,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	done := make(chan any)
 	go func() {
 		if s.opts.NATSSeverOptions.NoSigs {
-			s.NatsServer.Shutdown()
+			s.NATSServer.Shutdown()
 		}
-		s.NatsServer.WaitForShutdown()
+		s.NATSServer.WaitForShutdown()
 		close(done)
 	}()
 
