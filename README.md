@@ -28,6 +28,9 @@ then follow the [embedded example](./examples/embedded/embedded.go).
 - Reference the [examples folder](./examples) for examples of using nats-pillow.
 - This project was started and is being maintained to be used in the [Stelo Finance](https://github.com/stelofinance/stelofinance) project, so check that out for a real project example. 
 
+## Forced Opinions
+- `NoSigs` is forced to `true` for the nats-server configuration, as it generally doesn't align with embedding NATS in Go, but also causes problems with the Shutdown function due to nats-io/nats-server#6358.
+
 ## Quirks with Platform Adapters
 - FlyioClustering: Removing a region will cause any remaining machines will infinitely try to reconnect to the removed region, until they are restarted. This is probably fine, as it's just some network calls, but it is something to be aware of.
 - FlyioClustering: When JetStream is enabled all your regions must have >= 3 nodes, as JetStream clustering requires this for a quorum.

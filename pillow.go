@@ -97,6 +97,9 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 		}
 	}
 
+	// Disable this force when this is fixed: https://github.com/nats-io/nats-server/issues/6358
+	options.NATSSeverOptions.NoSigs = true
+
 	ns, err := server.NewServer(options.NATSSeverOptions)
 	if err != nil {
 		return nil, nil, err
@@ -134,10 +137,19 @@ func Run(opts ...Option) (*nats.Conn, *Server, error) {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	done := make(chan any)
+	if s.NATSServer == nil {
+		return nil
+	}
+
 	go func() {
-		if s.opts.NATSSeverOptions.NoSigs {
-			s.NATSServer.Shutdown()
-		}
+		// Re-enable this form of handling when this issue is fixed: https://github.com/nats-io/nats-server/issues/6358
+		//
+		// if s.opts.NATSSeverOptions.NoSigs {
+		// 	s.NATSServer.Shutdown()
+		// } else if s.NATSServer.Running() {
+		// 	s.NATSServer.Shutdown()
+		// }
+		s.NATSServer.Shutdown()
 		s.NATSServer.WaitForShutdown()
 		close(done)
 	}()
