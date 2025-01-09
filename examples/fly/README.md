@@ -7,8 +7,7 @@ JetStream is also enabled, and the file directory is configured in fly.toml.
 
 Note, there are some quirks to using JetStream on Flyio w/ pillow currently due to clustering/superclustering.
 - If you scale down and remove a region any remaining existing machines will infinitely try to reconnect to the removed region, until they are restarted. This is probably fine, as it's just some network calls, but it is something to be aware of.
-- When JS is enabled you need to explicitly pass the regions you want it to be enabled on in the Adapter options.
-
+- When JS is enabled you need to have >= 3 nodes in each region for JS to reach a quorum.
 
 ## Running Example
 This example is actually used locally for testing, so the Dockerfile assumes you are in the root directory of the project, and as such requires a `go.work` file at projcet root.

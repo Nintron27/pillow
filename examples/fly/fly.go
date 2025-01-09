@@ -26,7 +26,7 @@ func main() {
 		}),
 		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
-		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioHubAndSpoke{
+		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioClustering{
 			ClusterName: "pillow-hub",
 		}),
 	)
