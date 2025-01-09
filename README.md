@@ -22,7 +22,7 @@ then follow the [embedded example](./examples/embedded/embedded.go).
 - Flyio Adapters (auto clustering w/ route updates, node naming based on fly machine ID)
   - Clustering: Auto clustering in region, supercluster regions together.
   - HubAndSpoke: Auto cluster primary region, and leaf node other regions' machines to your hub.
-- <Your needed feature here>? Leave a feature request issue!
+- *Your needed feature here*? Leave a feature request issue!
 
 ## Examples
 - Reference the [examples folder](./examples) for examples of using nats-pillow.
