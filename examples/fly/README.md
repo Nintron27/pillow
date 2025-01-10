@@ -22,5 +22,11 @@ use ./examples/fly
 
 then to run this example you should use: `fly deploy --dockerfile "./examples/fly/Dockerfile" -c "./examples/fly/fly.toml"`
 
-## Network Topology Diagram
+## Network Topology Diagrams
+Curious about what each adapter's network topology looks like?
+
+### FlyioClustering 
 ![image](https://github.com/user-attachments/assets/4e0a66b1-da72-4a19-846a-5a0c573a04e0)
+
+### FlyioHubAndSpoke
+![image](https://github.com/user-attachments/assets/aac46fa0-e2fd-4bcd-b9bc-a17d9c278e0c)
