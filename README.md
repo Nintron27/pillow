@@ -51,11 +51,11 @@ Currently there are only Platform Adapters for [Flyio](https://fly.io/), and the
 - `FlyioClustering`: Removing a region will cause any remaining machines will infinitely try to reconnect to the removed region, until they are restarted. This is probably fine, as it's just some network calls, but it is something to be aware of.
 - `FlyioClustering`: When JetStream is enabled all your regions must have >= 3 nodes, as JetStream clustering requires this for a quorum.
 
-## Forced Opinions
-- `NoSigs` is forced to `true` for the nats-server configuration, as it generally doesn't align with embedding NATS in Go, but also causes problems with the Shutdown function due to nats-io/nats-server#6358.
-
 > [!CAUTION]
 > Take great caution when switching adapters (such as HubAndSpoke to Clustering) as the cluster names and JS domains will change.
 > Also caution with scaling down JS regions, as there seems to be a bug with quorums failing.
+
+## Forced Opinions
+- `NoSigs` is forced to `true` for the nats-server configuration, as it generally doesn't align with embedding NATS in Go, but also causes problems with the Shutdown function due to nats-io/nats-server#6358.
 
 *Credit to [@whaaaley](https://github.com/whaaaley) for project name and icon, and [@delaneyj](https://github.com/delaneyj) for the inspiration.*
