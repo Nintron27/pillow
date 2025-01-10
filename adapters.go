@@ -35,8 +35,8 @@ type FlyioClustering struct {
 // regions will have their machines individually connect to your primary region cluster
 // as leaf nodes.
 //
-// Additionally, the primary region cluster will have the JS domain of "hub" and the leaf nodes
-// will have the structure of "leaf-<REGION>-<MACHINE_ID>"
+// Additionally, the primary region cluster will have the JS domain of `hub` and the leaf nodes
+// will have the structure of `leaf-<REGION>-<MACHINE_ID>`
 type FlyioHubAndSpoke struct {
 	// The name to be used for the primary region cluster.
 	ClusterName string
@@ -183,6 +183,15 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 	}
 }
 
+// The supplied platformCfgr will configure your embedded nats server for a specific network
+// topology when deployed on the corrisponding cloud platform.
+//
+// For local development purposes it's recommended to disable this by checking for an
+// environment variable, for example:
+//
+//	pillow.WithPlatformAdapter(context.TODO(), os.Getenv("ENV") == "prod", &pillow.FlyioClustering{
+//	  ClusterName: "pillow-cluster",
+//	})
 func WithPlatformAdapter(ctx context.Context, enable bool, platformCfgr PlatformConfigurator) Option {
 	return platformCfgr.Configure(ctx)
 }
