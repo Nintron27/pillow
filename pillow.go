@@ -11,41 +11,47 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// ErrStartupTimedOut indicates that the embedded nats server exceeded its startup
+// timeout duration.
+var ErrStartupTimedOut = errors.New("embedded nats server startup timed out")
+
 type options struct {
 	server *server.Server
 
 	// Time to wait for embedded NATS to start
-	Timeout time.Duration
+	timeout time.Duration
 
-	// The returned client will communicate in process with the NATS server if enabled
-	InProcessClient bool
+	// The returned client will communicate in-process with the NATS server if enabled
+	inProcessClient bool
 
 	// Enable NATS Logger
-	EnableLogging bool
+	enableLogging bool
 
-	NATSSeverOptions *server.Options
+	natsSeverOptions *server.Options
 }
 
 type Option func(*options) error
 
 type Server struct {
+	// Reference to the underlying nats-server server.Server
 	NATSServer *server.Server
-	opts       *options
+
+	opts *options
 }
 
 // Duration to wait for embedded NATS to start. Defaults to 5 seconds if omitted
 func WithTimeout(t time.Duration) Option {
 	return func(o *options) error {
-		o.Timeout = t
+		o.timeout = t
 		return nil
 	}
 }
 
-// If enabled the returned client from Run() (and global pillow.Client) will
-// communicate in-process and not over the network layer
-func WithInProcessClient(enable bool) Option {
+// If enabled the clients returned from *Server.NATSClient() will
+// communicate with the embedded server over the network instead of in-process.
+func WithoutInProcessClient(enable bool) Option {
 	return func(o *options) error {
-		o.InProcessClient = enable
+		o.inProcessClient = !enable
 		return nil
 	}
 }
@@ -53,7 +59,7 @@ func WithInProcessClient(enable bool) Option {
 // Enable NATS internal logging
 func WithLogging(enable bool) Option {
 	return func(o *options) error {
-		o.EnableLogging = enable
+		o.enableLogging = enable
 		return nil
 	}
 }
@@ -63,81 +69,86 @@ func WithLogging(enable bool) Option {
 // in the list of options in Run().
 func WithNATSServerOptions(natsServerOpts *server.Options) Option {
 	return func(o *options) error {
-		o.NATSSeverOptions = natsServerOpts
+		o.natsSeverOptions = natsServerOpts
 		return nil
 	}
 }
 
-// Global variable of the nats client created from Run().
-//
-// If you are starting multiple embedded NATS servers, it's recommended to use
-// the client returned from Run() as this Client will just be from the last
-// invocation of Run().
-var Client *nats.Conn
-
-// Applies all passed options and starts the NATS server, returning a client
-// connection, a server struct, and error if there was a problem starting the
-// server.
+// Applies all passed options and starts the NATS server, returning a server struct
+// and error if there was a problem starting the server.
 //
 // All configuration functions start with "With". Example WithLogging(true)
-func Run(opts ...Option) (*nats.Conn, *Server, error) {
+func Run(opts ...Option) (*Server, error) {
 	// Set default options, then override with their configured options
 	options := &options{
-		Timeout:         time.Second * 5,
-		InProcessClient: true,
-		EnableLogging:   false,
-		NATSSeverOptions: &server.Options{
+		timeout:         time.Second * 5,
+		inProcessClient: true,
+		enableLogging:   false,
+		natsSeverOptions: &server.Options{
 			NoSigs: true,
 		},
 	}
 	for _, o := range opts {
 		err := o(options)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
-	ns, err := server.NewServer(options.NATSSeverOptions)
+	// Disable this force when this is fixed: https://github.com/nats-io/nats-server/issues/6358
+	options.natsSeverOptions.NoSigs = true
+
+	ns, err := server.NewServer(options.natsSeverOptions)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	if options.EnableLogging {
+	if options.enableLogging {
 		ns.ConfigureLogger()
 	}
 
 	ns.Start()
 
-	if !ns.ReadyForConnections(options.Timeout) {
-		return nil, nil, errors.New("NATS startup timed out")
+	if !ns.ReadyForConnections(options.timeout) {
+		return nil, ErrStartupTimedOut
 	}
 
 	options.server = ns
 
-	clientsOpts := []nats.Option{}
-	if options.InProcessClient {
-		clientsOpts = append(clientsOpts, nats.InProcessServer(ns))
-	}
-
-	nc, err := nats.Connect(ns.ClientURL(), clientsOpts...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	Client = nc
-
-	return nc, &Server{
+	return &Server{
 		NATSServer: ns,
 		opts:       options,
 	}, nil
 }
 
+// Returns a new nats client.
+//
+// Client will communicate in-process unless the embedded server was started with
+// WithoutInProcessClient(true)
+func (s *Server) NATSClient() (*nats.Conn, error) {
+	clientsOpts := []nats.Option{}
+	if s.opts.inProcessClient {
+		clientsOpts = append(clientsOpts, nats.InProcessServer(s.NATSServer))
+	}
+
+	return nats.Connect(s.NATSServer.ClientURL(), clientsOpts...)
+}
+
 func (s *Server) Shutdown(ctx context.Context) error {
 	done := make(chan any)
+	if s.NATSServer == nil {
+		return nil
+	}
+
 	go func() {
-		if s.opts.NATSSeverOptions.NoSigs {
-			s.NATSServer.Shutdown()
-		}
+		// Re-enable this form of handling when this issue is fixed: https://github.com/nats-io/nats-server/issues/6358
+		//
+		// if s.opts.NATSSeverOptions.NoSigs {
+		// 	s.NATSServer.Shutdown()
+		// } else if s.NATSServer.Running() {
+		// 	s.NATSServer.Shutdown()
+		// }
+		s.NATSServer.Shutdown()
 		s.NATSServer.WaitForShutdown()
 		close(done)
 	}()

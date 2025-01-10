@@ -19,12 +19,11 @@ func main() {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	_, ns, err := pillow.Run(
+	ns, err := pillow.Run(
 		pillow.WithNATSServerOptions(&server.Options{
 			JetStream: true,
 			StoreDir:  "./nats",
 		}),
-		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
 		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioClustering{
 			ClusterName: "pillow-hub",

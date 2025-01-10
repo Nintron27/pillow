@@ -16,15 +16,13 @@ import (
 func main() {
 	log.Println("Starting embedded NATS")
 
-	nc, ns, err := pillow.Run(
+	// All configuration functions passed to Run() start with "With"
+	ns, err := pillow.Run(
 		pillow.WithNATSServerOptions(&server.Options{
-			ServerName: "embedded-node",
-
 			// Enable JetStream and store in ./nats directory
 			JetStream: true,
 			StoreDir:  "./nats",
 		}),
-		pillow.WithInProcessClient(true),
 		pillow.WithLogging(true),
 	)
 	if err != nil {
@@ -32,13 +30,15 @@ func main() {
 	}
 	log.Println("Embedded NATS started")
 
+	nc, err := ns.NATSClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	sigCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// Echo back message
-	//
-	// Can also use the global client variable from pillow
-	// pillow.Client.Subscribe...
 	nc.Subscribe("echo", func(msg *nats.Msg) {
 		msg.Respond([]byte("echoing:" + string(msg.Data)))
 	})

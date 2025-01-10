@@ -103,10 +103,10 @@ func (c *FlyioClustering) Configure(ctx context.Context) Option {
 	}
 
 	return func(o *options) error {
-		o.NATSSeverOptions.ServerName = "fly-" + env.machineID
-		o.NATSSeverOptions.Routes = inRegionRoutes
-		o.NATSSeverOptions.Gateway = gatewayOpts
-		o.NATSSeverOptions.Cluster = server.ClusterOpts{
+		o.natsSeverOptions.ServerName = "fly-" + env.machineID
+		o.natsSeverOptions.Routes = inRegionRoutes
+		o.natsSeverOptions.Gateway = gatewayOpts
+		o.natsSeverOptions.Cluster = server.ClusterOpts{
 			ConnectRetries: 5,
 			Name:           clusterName,
 			Port:           ClusterPort,
@@ -161,24 +161,24 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 
 	return func(o *options) error {
 		if isPrimaryRegion {
-			o.NATSSeverOptions.JetStreamDomain = "hub"
-			o.NATSSeverOptions.LeafNode = server.LeafNodeOpts{
+			o.natsSeverOptions.JetStreamDomain = "hub"
+			o.natsSeverOptions.LeafNode = server.LeafNodeOpts{
 				Port: LeafNodePort,
 			}
-			o.NATSSeverOptions.Routes = primaryRegionURLs
-			o.NATSSeverOptions.Cluster = server.ClusterOpts{
+			o.natsSeverOptions.Routes = primaryRegionURLs
+			o.natsSeverOptions.Cluster = server.ClusterOpts{
 				ConnectRetries: 5,
 				Name:           c.ClusterName,
 				Port:           ClusterPort,
 			}
 		} else {
-			o.NATSSeverOptions.JetStreamDomain = "leaf-" + env.region + "-" + env.machineID
-			o.NATSSeverOptions.LeafNode = server.LeafNodeOpts{
+			o.natsSeverOptions.JetStreamDomain = "leaf-" + env.region + "-" + env.machineID
+			o.natsSeverOptions.LeafNode = server.LeafNodeOpts{
 				Remotes: remotes,
 			}
 		}
 
-		o.NATSSeverOptions.ServerName = "fly-" + env.machineID
+		o.natsSeverOptions.ServerName = "fly-" + env.machineID
 		return nil
 	}
 }
@@ -206,8 +206,8 @@ func flyioReloadRoutes(ctx context.Context, opts *options, env *flyioEnv) error 
 
 	// Check if the cluster routes have changed
 	clusterChanged := false
-	oldClusterRoutes := make([]string, 0, len(opts.NATSSeverOptions.Routes))
-	for _, route := range opts.NATSSeverOptions.Routes {
+	oldClusterRoutes := make([]string, 0, len(opts.natsSeverOptions.Routes))
+	for _, route := range opts.natsSeverOptions.Routes {
 		oldClusterRoutes = append(oldClusterRoutes, route.String())
 	}
 	newClusterRoutes := make([]string, 0, len(inRegionroutes))
@@ -262,7 +262,7 @@ func flyioReloadRoutes(ctx context.Context, opts *options, env *flyioEnv) error 
 	}
 
 	// Reload routes
-	options := opts.NATSSeverOptions.Clone()
+	options := opts.natsSeverOptions.Clone()
 	options.Routes = inRegionroutes
 	// See above as to why commented out
 	// options.Gateway.Gateways = gateways
@@ -270,7 +270,7 @@ func flyioReloadRoutes(ctx context.Context, opts *options, env *flyioEnv) error 
 	if err != nil {
 		return err
 	}
-	opts.NATSSeverOptions.Routes = inRegionroutes
+	opts.natsSeverOptions.Routes = inRegionroutes
 	// See above as to why commented out
 	// opts.NATSSeverOptions.Gateway.Gateways = gateways
 
