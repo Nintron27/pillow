@@ -1,12 +1,9 @@
-![Pillow icon](https://github.com/user-attachments/assets/7ed49aab-a998-4bef-80b4-230b6ad87690)
-
+![image](https://github.com/user-attachments/assets/0fce47c6-ac77-4bf9-9899-e551eab874c3)
 # Pillow
-A soft little wrapper for [NATS](https://nats.io/) ^-^
-
-Remove the boilerplate in your embedded NATS projects, and deploy to cloud platforms with added functionality!
+Remove the boilerplate in your embedded [NATS](https://nats.io/) projects, and deploy to cloud platforms with added functionality!
 
 > [!WARNING]
-> The Pillow API is unstable until v1.0.0 and as such may be subject to change in future releases until v1.0.0 is reached.
+> The API is unstable and subject to change until v1.0.0 is reached.
 
 ## Getting Started
 For simply embedding in a Go program:
@@ -42,12 +39,12 @@ will use Flyio's [Machine Runtime Environment](https://fly.io/docs/machines/runt
 
 ### Flyio
 Currently there are only Platform Adapters for [Flyio](https://fly.io/), and the two existing Adapters are:
-- `FlyioClustering`: Auto clustering in region, supercluster regions together.
-- `FlyioHubAndSpoke`: Auto cluster primary region, and leaf node other regions' machines to your hub.
+- `FlyioClustering`: Auto clustering in region, supercluster regions together. ([diagram](https://github.com/Nintron27/pillow/tree/main/examples/fly#flyioclustering))
+- `FlyioHubAndSpoke`: Auto cluster primary region, and leaf node other regions' machines to your hub. ([diagram](https://github.com/Nintron27/pillow/tree/main/examples/fly#flyiohubandspoke))
 
 ### Quirks w/ Platform Adapters
 - You should supply `pillow.WithPlatformAdapter` last in your `pillow.Run()` call as it will override certain nats server options for platform specific reasons, such as overridding the server name so they are unique on every machine.
-- **Flyio (Clustering & HubAndSpoke): Scaling down a JetStream enabled region may cause the JS quorum to fail, or the meta leader to not be established. This renders JS unuseable, and will hopefully be fixed or addressed in a future release.**
+- Flyio (Clustering & HubAndSpoke): Scaling down a JetStream enabled region may cause the JS quorum to fail, or the meta leader to not be established. This renders JS unuseable, and will hopefully be fixed or addressed in a future release.
 - `FlyioClustering`: Removing a region will cause any remaining machines will infinitely try to reconnect to the removed region, until they are restarted. This is probably fine, as it's just some network calls, but it is something to be aware of.
 - `FlyioClustering`: When JetStream is enabled all your regions must have >= 3 nodes, as JetStream clustering requires this for a quorum.
 
