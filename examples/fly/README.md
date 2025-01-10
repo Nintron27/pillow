@@ -21,3 +21,6 @@ use ./examples/fly
 ```
 
 then to run this example you should use: `fly deploy --dockerfile "./examples/fly/Dockerfile" -c "./examples/fly/fly.toml"`
+
+## Network Topology Diagram
+![image](https://github.com/user-attachments/assets/4e0a66b1-da72-4a19-846a-5a0c573a04e0)
