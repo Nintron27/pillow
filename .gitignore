@@ -1,2 +1,3 @@
 examples/fly/nats
+examples/embedded/nats
 go.work*
