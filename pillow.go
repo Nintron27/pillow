@@ -18,6 +18,10 @@ var ErrStartupTimedOut = errors.New("embedded nats server startup timed out")
 type options struct {
 	server *server.Server
 
+	withSystemUser     bool
+	systemUserUsername string
+	systemUserPassword string
+
 	// Time to wait for embedded NATS to start
 	timeout time.Duration
 
@@ -43,6 +47,17 @@ type Server struct {
 func WithTimeout(t time.Duration) Option {
 	return func(o *options) error {
 		o.timeout = t
+		return nil
+	}
+}
+
+// Duration to wait for embedded NATS to start. Defaults to 5 seconds if omitted
+func WithSystemUser(enable bool, username, password string) Option {
+	return func(o *options) error {
+		o.withSystemUser = enable
+		o.systemUserUsername = username
+		o.systemUserPassword = password
+
 		return nil
 	}
 }
@@ -97,6 +112,18 @@ func Run(opts ...Option) (*Server, error) {
 
 	// Disable this force when this is fixed: https://github.com/nats-io/nats-server/issues/6358
 	options.natsSeverOptions.NoSigs = true
+
+	if options.withSystemUser {
+		sysAcc := server.NewAccount(server.DEFAULT_SYSTEM_ACCOUNT)
+
+		options.natsSeverOptions.Accounts = []*server.Account{sysAcc}
+		options.natsSeverOptions.SystemAccount = server.DEFAULT_SYSTEM_ACCOUNT
+		options.natsSeverOptions.Users = []*server.User{{
+			Username: options.systemUserUsername,
+			Password: options.systemUserPassword,
+			Account:  sysAcc,
+		}}
+	}
 
 	ns, err := server.NewServer(options.natsSeverOptions)
 	if err != nil {
