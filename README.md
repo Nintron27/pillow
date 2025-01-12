@@ -44,13 +44,12 @@ Currently there are only Platform Adapters for [Flyio](https://fly.io/), and the
 
 ### Quirks w/ Platform Adapters
 - You should supply `pillow.WithPlatformAdapter` last in your `pillow.Run()` call as it will override certain nats server options for platform specific reasons, such as overridding the server name so they are unique on every machine.
-- Flyio (Clustering & HubAndSpoke): Scaling down a JetStream enabled region may cause the JS quorum to fail, or the meta leader to not be established. This renders JS unuseable, and will hopefully be fixed or addressed in a future release.
 - `FlyioClustering`: Removing a region will cause any remaining machines will infinitely try to reconnect to the removed region, until they are restarted. This is probably fine, as it's just some network calls, but it is something to be aware of.
 - `FlyioClustering`: When JetStream is enabled all your regions must have >= 3 nodes, as JetStream clustering requires this for a quorum.
 
 > [!CAUTION]
 > Take great caution when switching adapters (such as HubAndSpoke to Clustering) as the cluster names and JS domains will change.
-> Also caution with scaling down JS regions, as there seems to be a bug with quorums failing.
+> Also caution with scaling down JS regions, as removing a node that contains a stream or kv bucket can cause an outage. You should evict them as a peer before removing the machine.
 
 ## Forced Opinions
 - `NoSigs` is forced to `true` for the nats-server configuration, as it generally doesn't align with embedding NATS in Go, but also causes problems with the Shutdown function due to nats-io/nats-server#6358.
