@@ -25,6 +25,7 @@ func main() {
 			StoreDir:  "./nats",
 		}),
 		pillow.WithLogging(true),
+		pillow.WithSystemUser(true, "admin", "password"),
 		pillow.WithPlatformAdapter(ctx, env == "prod", &pillow.FlyioClustering{
 			ClusterName: "pillow-hub",
 		}),
