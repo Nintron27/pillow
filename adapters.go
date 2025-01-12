@@ -40,6 +40,12 @@ type FlyioClustering struct {
 type FlyioHubAndSpoke struct {
 	// The name to be used for the primary region cluster.
 	ClusterName string
+
+	// Disable clustering in the primary region
+	//
+	// This should only be enabled when the primary region has 1 node and you want to enable JS.
+	// Changing to a clustered deployment later may result in losing any data in JS.
+	DisableClustering bool
 }
 
 func (c *FlyioClustering) Configure(ctx context.Context) Option {
@@ -132,33 +138,30 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 		urlPort = LeafNodePort
 	}
 
-	primaryRegionURLs, err := flyioGetRegionURLs(ctx, &env, env.primaryRegion, urlProtocol, urlPort)
-	if err != nil {
-		// Do nothing, regions will be empty until there is a resolution to
-		// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
-		//
-		// return func(o *options) error { return err }
-	}
-	// Till issue above is fixed forcefully include self so that when JS is enabled it doesn't crash on
-	// startup from empty routes, unless it's not primary region, in that case return error as there
-	// isn't much we can do to recover from this.
-	if len(primaryRegionURLs) == 0 {
-		if isPrimaryRegion {
-			selfURL, err := url.Parse("nats://[" + env.privateIP + "]:" + strconv.Itoa(ClusterPort))
-			if err != nil {
-				return func(o *options) error { return errors.New("Unable to parse NATS gateway url") }
-			}
-			primaryRegionURLs = append(primaryRegionURLs, selfURL)
-		} else {
-			return func(o *options) error { return errors.New("Unable to get primary region routes") }
+	var primaryRegionURLs []*url.URL
+	if !isPrimaryRegion || !c.DisableClustering {
+		urls, err := flyioGetRegionURLs(ctx, &env, env.primaryRegion, urlProtocol, urlPort)
+		if err != nil {
+			// Do nothing, regions will be empty until there is a resolution to
+			// this post: https://community.fly.io/t/machine-cannot-read-its-own-internal-dns-entry-on-startup/23278
+			//
+			// return func(o *options) error { return err }
 		}
-	}
-
-	remotes := make([]*server.RemoteLeafOpts, 0)
-	if !isPrimaryRegion {
-		remotes = append(remotes, &server.RemoteLeafOpts{
-			URLs: primaryRegionURLs,
-		})
+		// Till issue above is fixed forcefully include self so that when JS is enabled it doesn't crash on
+		// startup from empty routes, unless it's not primary region, in that case return error as there
+		// isn't much we can do to recover from this.
+		primaryRegionURLs = urls
+		if len(primaryRegionURLs) == 0 {
+			if isPrimaryRegion {
+				selfURL, err := url.Parse("nats://[" + env.privateIP + "]:" + strconv.Itoa(ClusterPort))
+				if err != nil {
+					return func(o *options) error { return errors.New("Unable to parse NATS gateway url") }
+				}
+				primaryRegionURLs = append(primaryRegionURLs, selfURL)
+			} else {
+				return func(o *options) error { return errors.New("Unable to get primary region routes") }
+			}
+		}
 	}
 
 	return func(o *options) error {
@@ -168,14 +171,23 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 				Host: env.privateIP,
 				Port: LeafNodePort,
 			}
-			o.natsSeverOptions.Routes = primaryRegionURLs
-			o.natsSeverOptions.Cluster = server.ClusterOpts{
-				ConnectRetries: 5,
-				Name:           c.ClusterName,
-				Host:           env.privateIP,
-				Port:           ClusterPort,
+			if !c.DisableClustering {
+				o.natsSeverOptions.Routes = primaryRegionURLs
+				o.natsSeverOptions.Cluster = server.ClusterOpts{
+					ConnectRetries: 5,
+					Name:           c.ClusterName,
+					Host:           env.privateIP,
+					Port:           ClusterPort,
+				}
 			}
 		} else {
+			remotes := make([]*server.RemoteLeafOpts, 0)
+			if !isPrimaryRegion {
+				remotes = append(remotes, &server.RemoteLeafOpts{
+					URLs: primaryRegionURLs,
+				})
+			}
+
 			o.natsSeverOptions.JetStreamDomain = "leaf-" + env.region + "-" + env.machineID
 			o.natsSeverOptions.LeafNode = server.LeafNodeOpts{
 				Remotes: remotes,
