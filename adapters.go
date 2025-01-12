@@ -97,6 +97,7 @@ func (c *FlyioClustering) Configure(ctx context.Context) Option {
 
 	gatewayOpts = server.GatewayOpts{
 		Name:           clusterName,
+		Host:           env.privateIP,
 		Port:           GatewayPort,
 		ConnectRetries: 5,
 		Gateways:       gateways,
@@ -109,6 +110,7 @@ func (c *FlyioClustering) Configure(ctx context.Context) Option {
 		o.natsSeverOptions.Cluster = server.ClusterOpts{
 			ConnectRetries: 5,
 			Name:           clusterName,
+			Host:           env.privateIP,
 			Port:           ClusterPort,
 		}
 		return nil
@@ -163,12 +165,14 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 		if isPrimaryRegion {
 			o.natsSeverOptions.JetStreamDomain = "hub"
 			o.natsSeverOptions.LeafNode = server.LeafNodeOpts{
+				Host: env.privateIP,
 				Port: LeafNodePort,
 			}
 			o.natsSeverOptions.Routes = primaryRegionURLs
 			o.natsSeverOptions.Cluster = server.ClusterOpts{
 				ConnectRetries: 5,
 				Name:           c.ClusterName,
+				Host:           env.privateIP,
 				Port:           ClusterPort,
 			}
 		} else {
