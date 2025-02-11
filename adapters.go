@@ -209,6 +209,12 @@ func (c *FlyioHubAndSpoke) Configure(ctx context.Context) Option {
 //	  ClusterName: "pillow-cluster",
 //	})
 func WithPlatformAdapter(ctx context.Context, enable bool, platformCfgr PlatformConfigurator) Option {
+	if !enable {
+		return func(*options) error {
+			return nil
+		}
+	}
+
 	return platformCfgr.Configure(ctx)
 }
 
