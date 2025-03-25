@@ -10,7 +10,7 @@ Note, there are some quirks to using JetStream on Flyio w/ pillow currently due 
 - When JS is enabled you need to have >= 3 nodes in each region for JS to reach a quorum.
 
 ## Running Example
-This example is actually used locally for testing, so the Dockerfile assumes you are in the root directory of the project, and as such requires a `go.work` file at projcet root.
+This example is actually used locally for testing, so the Dockerfile assumes you are in the root directory of the project, and as such requires a `go.work` file at project root.
 
 ```
 go 1.23.1
